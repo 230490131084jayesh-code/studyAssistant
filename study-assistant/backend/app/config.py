@@ -14,6 +14,19 @@ DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 
+# Gemini support: comma-separated list of API keys (from separate Google Cloud
+# projects, since free-tier quota is enforced per-project, not per-key). The
+# app tries each key in order and rotates to the next one if a key's quota is
+# exhausted (HTTP 429), so a single project's daily limit doesn't stop the app.
+GEMINI_API_KEYS = [
+    k.strip() for k in os.getenv("GEMINI_API_KEYS", "").split(",") if k.strip()
+]
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
+# Which provider to use for the final answer/quiz/summary generation step.
+# "gemini" or "anthropic". Defaults to gemini if keys are present, else anthropic.
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini" if GEMINI_API_KEYS else "anthropic")
+
 # Comma-separated list of allowed frontend origins, e.g.
 # "http://localhost:5173,https://your-frontend.onrender.com"
 _default_origins = "http://localhost:5173,http://127.0.0.1:5173"

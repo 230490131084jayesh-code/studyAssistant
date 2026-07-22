@@ -1,14 +1,32 @@
-"""All calls to the Anthropic API live here. Every prompt is built so Claude
-answers strictly from the supplied document excerpts, never from outside knowledge."""
+"""All calls to the LLM (Gemini or Anthropic) live here. Every prompt is built
+so the model answers strictly from the supplied document excerpts, never from
+outside knowledge.
+
+Supports Google Gemini with automatic key rotation across multiple API keys
+(useful since Gemini's free-tier quota is enforced per Google Cloud project,
+not per key — rotating keys from separate projects gives more effective
+daily headroom), and falls back to Anthropic if configured instead.
+"""
 import json
 import re
 from typing import List, Dict
 
-import anthropic
+import httpx
 
-from app.config import ANTHROPIC_API_KEY, CLAUDE_MODEL
+from app.config import (
+    GEMINI_API_KEYS,
+    GEMINI_MODEL,
+    ANTHROPIC_API_KEY,
+    CLAUDE_MODEL,
+    LLM_PROVIDER,
+)
 
-_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+_GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+
+_anthropic_client = None
+if LLM_PROVIDER == "anthropic":
+    import anthropic
+    _anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 
 def _format_context(chunks: List[Dict]) -> str:
@@ -16,6 +34,68 @@ def _format_context(chunks: List[Dict]) -> str:
     for i, c in enumerate(chunks, start=1):
         parts.append(f"[Excerpt {i} | {c['filename']} - {c['location']}]\n{c['text']}")
     return "\n\n".join(parts)
+
+
+def _call_gemini(system: str, user_content: str, max_tokens: int) -> str:
+    """Calls Gemini's generateContent endpoint, trying each configured API key
+    in order. If a key is rate-limited (HTTP 429) or otherwise rejected, moves
+    on to the next key. Raises the last error if every key fails."""
+    if not GEMINI_API_KEYS:
+        raise RuntimeError(
+            "No Gemini API keys configured. Set GEMINI_API_KEYS (comma-separated) "
+            "in your environment."
+        )
+
+    url = _GEMINI_URL.format(model=GEMINI_MODEL)
+    payload = {
+        "system_instruction": {"parts": [{"text": system}]},
+        "contents": [{"role": "user", "parts": [{"text": user_content}]}],
+        "generationConfig": {"maxOutputTokens": max_tokens},
+    }
+
+    last_error = None
+    for key in GEMINI_API_KEYS:
+        try:
+            resp = httpx.post(
+                url,
+                params={"key": key},
+                json=payload,
+                timeout=60,
+            )
+            if resp.status_code == 429:
+                # This key/project's quota is exhausted — try the next one.
+                last_error = RuntimeError(f"Gemini key ending in ...{key[-4:]} rate-limited (429)")
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            candidates = data.get("candidates", [])
+            if not candidates:
+                last_error = RuntimeError("Gemini returned no candidates")
+                continue
+            parts = candidates[0].get("content", {}).get("parts", [])
+            text = "".join(p.get("text", "") for p in parts)
+            return text
+        except httpx.HTTPStatusError as e:
+            last_error = e
+            continue
+
+    raise RuntimeError(f"All Gemini API keys failed. Last error: {last_error}")
+
+
+def _call_anthropic(system: str, user_content: str, max_tokens: int) -> str:
+    message = _anthropic_client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=max_tokens,
+        system=system,
+        messages=[{"role": "user", "content": user_content}],
+    )
+    return "".join(b.text for b in message.content if b.type == "text")
+
+
+def _generate(system: str, user_content: str, max_tokens: int) -> str:
+    if LLM_PROVIDER == "gemini":
+        return _call_gemini(system, user_content, max_tokens)
+    return _call_anthropic(system, user_content, max_tokens)
 
 
 def answer_question(question: str, chunks: List[Dict]) -> Dict:
@@ -33,16 +113,11 @@ def answer_question(question: str, chunks: List[Dict]) -> Dict:
         "cover it — do not guess. When you use a fact, mention which excerpt number it "
         "came from, like (Excerpt 2). Keep answers clear and study-friendly."
     )
-    message = _client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=1000,
-        system=system,
-        messages=[{
-            "role": "user",
-            "content": f"Document excerpts:\n\n{context}\n\nQuestion: {question}",
-        }],
+    answer_text = _generate(
+        system,
+        f"Document excerpts:\n\n{context}\n\nQuestion: {question}",
+        1000,
     )
-    answer_text = "".join(b.text for b in message.content if b.type == "text")
 
     sources = [{"filename": c["filename"], "location": c["location"]} for c in chunks]
     return {"answer": answer_text, "sources": sources}
@@ -59,13 +134,7 @@ def generate_summary(chunks: List[Dict], style: str = "concise") -> str:
         "You are a study assistant. Summarize the following document excerpts using ONLY "
         "the information they contain. Do not add outside facts. " + length_hint
     )
-    message = _client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=1200,
-        system=system,
-        messages=[{"role": "user", "content": context}],
-    )
-    return "".join(b.text for b in message.content if b.type == "text")
+    return _generate(system, context, 1200)
 
 
 def generate_quiz(chunks: List[Dict], num_questions: int = 5, question_type: str = "mixed") -> List[Dict]:
@@ -88,13 +157,7 @@ def generate_quiz(chunks: List[Dict], num_questions: int = 5, question_type: str
         f"Document excerpts:\n\n{context}\n\n"
         f"Create {num_questions} quiz questions ({type_hint}) based only on these excerpts."
     )
-    message = _client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=2000,
-        system=system,
-        messages=[{"role": "user", "content": user_msg}],
-    )
-    raw = "".join(b.text for b in message.content if b.type == "text")
+    raw = _generate(system, user_msg, 2000)
     raw = re.sub(r"^```(json)?|```$", "", raw.strip(), flags=re.MULTILINE).strip()
 
     try:
