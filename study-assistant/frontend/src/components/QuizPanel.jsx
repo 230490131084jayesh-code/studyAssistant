@@ -6,6 +6,7 @@ export default function QuizPanel({ selectedIds, hasDocuments }) {
   const [type, setType] = useState('mixed')
   const [questions, setQuestions] = useState([])
   const [selectedAnswers, setSelectedAnswers] = useState({})
+  const [shortAnswers, setShortAnswers] = useState({})
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -13,10 +14,16 @@ export default function QuizPanel({ selectedIds, hasDocuments }) {
   const canGenerate = hasDocuments && selectedIds.length > 0
 
   const mcqQuestions = questions.filter((q) => q.type === 'mcq')
+  const shortQuestions = questions.filter((q) => q.type !== 'mcq')
   const allMcqAnswered = mcqQuestions.every((_, idx) => {
     const originalIndex = questions.indexOf(mcqQuestions[idx])
     return selectedAnswers[originalIndex] !== undefined
   })
+  const allShortAnswered = shortQuestions.every((_, idx) => {
+    const originalIndex = questions.indexOf(shortQuestions[idx])
+    return (shortAnswers[originalIndex] || '').trim().length > 0
+  })
+  const allAnswered = allMcqAnswered && allShortAnswered
   const score = mcqQuestions.reduce((count, q) => {
     const originalIndex = questions.indexOf(q)
     return selectedAnswers[originalIndex] === q.answer ? count + 1 : count
@@ -26,6 +33,7 @@ export default function QuizPanel({ selectedIds, hasDocuments }) {
     setError(null)
     setLoading(true)
     setSelectedAnswers({})
+    setShortAnswers({})
     setSubmitted(false)
     try {
       const result = await api.generateQuiz(selectedIds, numQuestions, type)
@@ -100,9 +108,25 @@ export default function QuizPanel({ selectedIds, hasDocuments }) {
                 </div>
               )}
 
+              {q.type !== 'mcq' && (
+                <textarea
+                  className="quiz-short-answer-input"
+                  placeholder="Type your answer here…"
+                  rows={2}
+                  value={shortAnswers[i] || ''}
+                  disabled={submitted}
+                  onChange={(e) => setShortAnswers((s) => ({ ...s, [i]: e.target.value }))}
+                />
+              )}
+
               {submitted && (
                 <>
-                  {q.type !== 'mcq' && <div className="quiz-answer-line">Answer: {q.answer}</div>}
+                  {q.type !== 'mcq' && (
+                    <>
+                      <div className="quiz-answer-line quiz-your-answer">Your answer: {shortAnswers[i] || '(blank)'}</div>
+                      <div className="quiz-answer-line">Correct answer: {q.answer}</div>
+                    </>
+                  )}
                   {q.explanation && <div className="quiz-explanation">{q.explanation}</div>}
                 </>
               )}
@@ -113,8 +137,8 @@ export default function QuizPanel({ selectedIds, hasDocuments }) {
             <button
               className="btn-primary submit-quiz-btn"
               onClick={handleSubmit}
-              disabled={!allMcqAnswered}
-              title={!allMcqAnswered ? 'Answer every multiple-choice question to submit' : undefined}
+              disabled={!allAnswered}
+              title={!allAnswered ? 'Answer every question to submit' : undefined}
             >
               Submit quiz
             </button>
@@ -122,7 +146,9 @@ export default function QuizPanel({ selectedIds, hasDocuments }) {
             <div className="quiz-score-banner">
               {mcqQuestions.length > 0
                 ? `You scored ${score} / ${mcqQuestions.length} on multiple choice`
-                : 'Answers revealed below'}
+                : ''}
+              {mcqQuestions.length > 0 && shortQuestions.length > 0 ? ' · ' : ''}
+              {shortQuestions.length > 0 ? 'Compare your short answers above to the correct ones' : ''}
             </div>
           )}
         </div>

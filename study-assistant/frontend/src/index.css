@@ -449,6 +449,28 @@ select, .num-input {
   background: rgba(192, 96, 90, 0.12);
 }
 
+.quiz-short-answer-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 0.87rem;
+  resize: vertical;
+  margin-bottom: 10px;
+  background: var(--bg, transparent);
+  color: inherit;
+}
+
+.quiz-short-answer-input:disabled {
+  opacity: 0.75;
+}
+
+.quiz-your-answer {
+  font-weight: 600;
+}
+
 .submit-quiz-btn {
   margin-top: 8px;
   width: 100%;
