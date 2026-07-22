@@ -21,7 +21,7 @@ CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 GEMINI_API_KEYS = [
     k.strip() for k in os.getenv("GEMINI_API_KEYS", "").split(",") if k.strip()
 ]
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 
 # Which provider to use for the final answer/quiz/summary generation step.
 # "gemini" or "anthropic". Defaults to gemini if keys are present, else anthropic.
