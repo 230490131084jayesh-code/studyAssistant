@@ -1,0 +1,40 @@
+services:
+  # --- Backend: FastAPI ---
+  - type: web
+    name: study-assistant-backend
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "bash start.sh"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: ANTHROPIC_API_KEY
+        sync: false  # set manually in Render dashboard — do not commit your key
+      - key: CLAUDE_MODEL
+        value: claude-sonnet-5
+      - key: ALLOWED_ORIGINS
+        value: https://study-assistant-frontend.onrender.com
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: study-data
+      mountPath: /var/data
+      sizeGB: 1
+
+  # --- Frontend: static React build ---
+  - type: web
+    name: study-assistant-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: "npm install && npm run build"
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://study-assistant-backend.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
