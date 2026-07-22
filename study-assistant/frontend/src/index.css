@@ -449,6 +449,22 @@ select, .num-input {
   background: rgba(192, 96, 90, 0.12);
 }
 
+.submit-quiz-btn {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.quiz-score-banner {
+  margin-top: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(120, 130, 200, 0.10);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+}
+
 .reveal-btn {
   background: none;
   border: none;

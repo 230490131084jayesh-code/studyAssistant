@@ -5,18 +5,28 @@ export default function QuizPanel({ selectedIds, hasDocuments }) {
   const [numQuestions, setNumQuestions] = useState(5)
   const [type, setType] = useState('mixed')
   const [questions, setQuestions] = useState([])
-  const [revealed, setRevealed] = useState({})
   const [selectedAnswers, setSelectedAnswers] = useState({})
+  const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
   const canGenerate = hasDocuments && selectedIds.length > 0
 
+  const mcqQuestions = questions.filter((q) => q.type === 'mcq')
+  const allMcqAnswered = mcqQuestions.every((_, idx) => {
+    const originalIndex = questions.indexOf(mcqQuestions[idx])
+    return selectedAnswers[originalIndex] !== undefined
+  })
+  const score = mcqQuestions.reduce((count, q) => {
+    const originalIndex = questions.indexOf(q)
+    return selectedAnswers[originalIndex] === q.answer ? count + 1 : count
+  }, 0)
+
   const handleGenerate = async () => {
     setError(null)
     setLoading(true)
-    setRevealed({})
     setSelectedAnswers({})
+    setSubmitted(false)
     try {
       const result = await api.generateQuiz(selectedIds, numQuestions, type)
       setQuestions(result.questions || [])
@@ -25,6 +35,10 @@ export default function QuizPanel({ selectedIds, hasDocuments }) {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSubmit = () => {
+    setSubmitted(true)
   }
 
   return (
@@ -63,12 +77,11 @@ export default function QuizPanel({ selectedIds, hasDocuments }) {
                 <div className="quiz-options">
                   {q.options.map((opt, j) => {
                     const isSelected = selectedAnswers[i] === opt
-                    const isRevealed = !!revealed[i]
                     const isCorrectOpt = opt === q.answer
                     let cls = 'quiz-option'
-                    if (isSelected && !isRevealed) cls += ' selected'
-                    if (isRevealed && isCorrectOpt) cls += ' correct'
-                    if (isRevealed && isSelected && !isCorrectOpt) cls += ' incorrect'
+                    if (isSelected && !submitted) cls += ' selected'
+                    if (submitted && isCorrectOpt) cls += ' correct'
+                    if (submitted && isSelected && !isCorrectOpt) cls += ' incorrect'
                     return (
                       <div
                         key={j}
@@ -76,7 +89,7 @@ export default function QuizPanel({ selectedIds, hasDocuments }) {
                         role="button"
                         tabIndex={0}
                         onClick={() => {
-                          if (isRevealed) return
+                          if (submitted) return
                           setSelectedAnswers((s) => ({ ...s, [i]: opt }))
                         }}
                       >
@@ -87,11 +100,7 @@ export default function QuizPanel({ selectedIds, hasDocuments }) {
                 </div>
               )}
 
-              {!revealed[i] ? (
-                <button className="reveal-btn" onClick={() => setRevealed((r) => ({ ...r, [i]: true }))}>
-                  Reveal answer
-                </button>
-              ) : (
+              {submitted && (
                 <>
                   {q.type !== 'mcq' && <div className="quiz-answer-line">Answer: {q.answer}</div>}
                   {q.explanation && <div className="quiz-explanation">{q.explanation}</div>}
@@ -99,6 +108,23 @@ export default function QuizPanel({ selectedIds, hasDocuments }) {
               )}
             </div>
           ))}
+
+          {!submitted ? (
+            <button
+              className="btn-primary submit-quiz-btn"
+              onClick={handleSubmit}
+              disabled={!allMcqAnswered}
+              title={!allMcqAnswered ? 'Answer every multiple-choice question to submit' : undefined}
+            >
+              Submit quiz
+            </button>
+          ) : (
+            <div className="quiz-score-banner">
+              {mcqQuestions.length > 0
+                ? `You scored ${score} / ${mcqQuestions.length} on multiple choice`
+                : 'Answers revealed below'}
+            </div>
+          )}
         </div>
       )}
     </div>
