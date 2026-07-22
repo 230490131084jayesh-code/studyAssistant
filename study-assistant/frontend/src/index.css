@@ -439,6 +439,16 @@ select, .num-input {
   background: rgba(111, 169, 122, 0.12);
 }
 
+.quiz-option.selected {
+  border-color: var(--secondary);
+  background: rgba(120, 130, 200, 0.12);
+}
+
+.quiz-option.incorrect {
+  border-color: #c0605a;
+  background: rgba(192, 96, 90, 0.12);
+}
+
 .reveal-btn {
   background: none;
   border: none;

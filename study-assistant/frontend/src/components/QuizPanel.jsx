@@ -6,6 +6,7 @@ export default function QuizPanel({ selectedIds, hasDocuments }) {
   const [type, setType] = useState('mixed')
   const [questions, setQuestions] = useState([])
   const [revealed, setRevealed] = useState({})
+  const [selectedAnswers, setSelectedAnswers] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -15,6 +16,7 @@ export default function QuizPanel({ selectedIds, hasDocuments }) {
     setError(null)
     setLoading(true)
     setRevealed({})
+    setSelectedAnswers({})
     try {
       const result = await api.generateQuiz(selectedIds, numQuestions, type)
       setQuestions(result.questions || [])
@@ -59,14 +61,29 @@ export default function QuizPanel({ selectedIds, hasDocuments }) {
 
               {q.type === 'mcq' && q.options && (
                 <div className="quiz-options">
-                  {q.options.map((opt, j) => (
-                    <div
-                      key={j}
-                      className={`quiz-option${revealed[i] && opt === q.answer ? ' correct' : ''}`}
-                    >
-                      {opt}
-                    </div>
-                  ))}
+                  {q.options.map((opt, j) => {
+                    const isSelected = selectedAnswers[i] === opt
+                    const isRevealed = !!revealed[i]
+                    const isCorrectOpt = opt === q.answer
+                    let cls = 'quiz-option'
+                    if (isSelected && !isRevealed) cls += ' selected'
+                    if (isRevealed && isCorrectOpt) cls += ' correct'
+                    if (isRevealed && isSelected && !isCorrectOpt) cls += ' incorrect'
+                    return (
+                      <div
+                        key={j}
+                        className={cls}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                          if (isRevealed) return
+                          setSelectedAnswers((s) => ({ ...s, [i]: opt }))
+                        }}
+                      >
+                        {opt}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
 
