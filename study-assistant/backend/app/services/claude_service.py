@@ -147,17 +147,24 @@ def generate_quiz(chunks: List[Dict], num_questions: int = 5, question_type: str
 
     system = (
         "You are a study assistant generating a quiz strictly from the provided document "
-        "excerpts. Do not use outside knowledge. Respond with ONLY valid JSON (no markdown "
-        "fences, no preamble) matching this schema:\n"
+        "excerpts. Do not use outside knowledge. You MUST generate EXACTLY the requested "
+        "number of questions — if the excerpts feel limited, create additional questions "
+        "that approach the same material from different angles (definitions, examples, "
+        "comparisons, application) rather than generating fewer questions. "
+        "Respond with ONLY valid JSON (no markdown fences, no preamble) matching this schema:\n"
         '{"questions": [{"type": "mcq" | "short_answer", "question": str, '
         '"options": [str, str, str, str] (omit for short_answer), '
         '"answer": str, "explanation": str}]}'
     )
     user_msg = (
         f"Document excerpts:\n\n{context}\n\n"
-        f"Create {num_questions} quiz questions ({type_hint}) based only on these excerpts."
+        f"Create EXACTLY {num_questions} quiz questions ({type_hint}) based only on these "
+        f"excerpts. The output array must contain exactly {num_questions} items — no more, no fewer."
     )
-    raw = _generate(system, user_msg, 2000)
+    # Scale the token budget with question count so longer quizzes don't get
+    # truncated mid-JSON (each question + explanation needs meaningful room).
+    max_tokens = min(4000, 300 + num_questions * 250)
+    raw = _generate(system, user_msg, max_tokens)
     raw = re.sub(r"^```(json)?|```$", "", raw.strip(), flags=re.MULTILINE).strip()
 
     try:
