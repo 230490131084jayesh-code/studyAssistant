@@ -12,5 +12,7 @@ python-pptx==1.0.2
 python-docx==1.1.2
 
 # Local vector search (no external API key needed for retrieval)
+# Note: sentence-transformers/PyTorch removed — using Chroma's built-in
+# ONNX-based embedding function instead (see vector_store.py). Much lighter
+# on memory, which matters on a 512MB free-tier instance.
 chromadb==0.5.5
-sentence-transformers==3.0.1

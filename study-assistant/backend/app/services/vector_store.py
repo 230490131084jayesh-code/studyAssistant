@@ -24,9 +24,11 @@ def _get_collection():
     global _client, _embedding_fn, _collection
     if _collection is None:
         _client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-        _embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name="all-MiniLM-L6-v2"
-        )
+        # Uses Chroma's built-in ONNX-based MiniLM embedding function instead of
+        # sentence-transformers/PyTorch. Same underlying model family, but far
+        # lighter in memory — PyTorch alone can add several hundred MB of RSS,
+        # which is too much for a 512MB free-tier instance.
+        _embedding_fn = embedding_functions.ONNXMiniLM_L6_V2()
         _collection = _client.get_or_create_collection(
             name="study_documents",
             embedding_function=_embedding_fn,
